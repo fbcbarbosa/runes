@@ -32,7 +32,9 @@ func TestDownloadUCD(t *testing.T) {
 	defer srv.Close()
 
 	pathUCD := fmt.Sprintf("./TEST%d-UnicodeData.txt", time.Now().UnixNano())
-	downloadUCD(srv.URL, pathUCD)
+	done := make(chan bool)
+	go downloadUCD(srv.URL, pathUCD, done)
+	_ = <-done
 	ucd, err := os.Open(pathUCD)
 	if os.IsNotExist(err) {
 		t.Errorf("downloadUCD did not generate: %v\n%v", pathUCD, err)

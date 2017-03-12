@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -86,17 +87,6 @@ func removeDuplicates(slice []string) []string {
 	return newSlice
 }
 
-func downloadUCD(url, path string) {
-	resp, err := http.Get(url)
-	check(err)
-	defer resp.Body.Close()
-	file, err := os.Create(path)
-	check(err)
-	defer file.Close()
-	_, err = io.Copy(file, resp.Body)
-	check(err)
-}
-
 func obtainUCDPath() string {
 	ucdPath := os.Getenv("UCD_PATH")
 	if ucdPath == "" {
@@ -111,10 +101,37 @@ func openUCD(path string) (*os.File, error) {
 	ucd, err := os.Open(path)
 	if os.IsNotExist(err) {
 		fmt.Printf("%s not found\nDownloading %s...\n", path, ucdURL)
-		downloadUCD(ucdURL, path)
+		done := make(chan bool)
+		go downloadUCD(ucdURL, path, done)
+		progress(done)
 		ucd, err = os.Open(path)
 	}
 	return ucd, err
+}
+
+func downloadUCD(url, path string, done chan<- bool) {
+	resp, err := http.Get(url)
+	check(err)
+	defer resp.Body.Close()
+	file, err := os.Create(path)
+	check(err)
+	defer file.Close()
+	_, err = io.Copy(file, resp.Body)
+	check(err)
+	done <- true
+}
+
+func progress(done <-chan bool) {
+	for {
+		select {
+		case <-done:
+			fmt.Println()
+			return
+		default:
+			fmt.Print(".")
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
 }
 
 func restore(name, value string, exists bool) {

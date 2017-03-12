@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/user"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
+const ucdURL = "http://www.unicode.org/Public/UNIDATA/UnicodeData.txt"
+
 func main() {
-	ucd, err := os.Open("UnicodeData.txt")
+	ucd, err := openUCD(obtainUCDPath())
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	defer func() { ucd.Close() }()
+	defer ucd.Close()
 	query := strings.Join(os.Args[1:], " ")
 	List(ucd, strings.ToUpper(query))
 }
@@ -80,4 +84,49 @@ func removeDuplicates(slice []string) []string {
 		}
 	}
 	return newSlice
+}
+
+func downloadUCD(url, path string) {
+	resp, err := http.Get(url)
+	check(err)
+	defer resp.Body.Close()
+	file, err := os.Create(path)
+	check(err)
+	defer file.Close()
+	_, err = io.Copy(file, resp.Body)
+	check(err)
+}
+
+func obtainUCDPath() string {
+	ucdPath := os.Getenv("UCD_PATH")
+	if ucdPath == "" {
+		user, err := user.Current()
+		check(err)
+		ucdPath = user.HomeDir + "/UnicodeData.txt"
+	}
+	return ucdPath
+}
+
+func openUCD(path string) (*os.File, error) {
+	ucd, err := os.Open(path)
+	if os.IsNotExist(err) {
+		fmt.Printf("%s not found\nDownloading %s...\n", path, ucdURL)
+		downloadUCD(ucdURL, path)
+		ucd, err = os.Open(path)
+	}
+	return ucd, err
+}
+
+func restore(name, value string, exists bool) {
+	if exists {
+		os.Setenv(name, value)
+	} else {
+		os.Unsetenv(name)
+	}
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
 }

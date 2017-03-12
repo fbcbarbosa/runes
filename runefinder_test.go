@@ -1,9 +1,15 @@
 package main
 
-import "testing"
-import "strings"
-import "os"
-import "reflect"
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
 
 const lineLetterA = `0041;LATIN CAPITAL LETTER A;Lu;0;L;;;;;N;;;;0061;`
 const lineApostrophe = `0027;APOSTROPHE;Po;0;ON;;;;;N;APOSTROPHE-QUOTE;;;;`
@@ -17,6 +23,65 @@ const lines3Dto43 = `
 0042;LATIN CAPITAL LETTER B;Lu;0;L;;;;;N;;;;0062;
 0043;LATIN CAPITAL LETTER C;Lu;0;L;;;;;N;;;;0063;
 `
+
+func TestDownloadUCD(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(lines3Dto43))
+		}))
+	defer srv.Close()
+
+	pathUCD := fmt.Sprintf("./TEST%d-UnicodeData.txt", time.Now().UnixNano())
+	downloadUCD(srv.URL, pathUCD)
+	ucd, err := os.Open(pathUCD)
+	if os.IsNotExist(err) {
+		t.Errorf("downloadUCD did not generate: %v\n%v", pathUCD, err)
+	}
+	ucd.Close()
+	os.Remove(pathUCD)
+}
+
+func TestOpenUCD_local(t *testing.T) {
+	ucdPath := obtainUCDPath()
+	ucd, err := openUCD(ucdPath)
+	defer ucd.Close()
+	if err != nil {
+		t.Errorf("openUCD(%q):\n%v", ucdPath, err)
+	}
+}
+
+func TestOpenUCD_remote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Test ignored [option -test.short]")
+	}
+	ucdPath := fmt.Sprintf("./TEST%d-UnicodeData.txt", time.Now().UnixNano())
+	ucd, err := openUCD(ucdPath)
+	defer ucd.Close()
+	if err != nil {
+		t.Errorf("openUCD(%q):\n%v", ucdPath, err)
+	}
+	os.Remove(ucdPath)
+}
+
+func TestObtainPathUCD_set(t *testing.T) {
+	oldPath, exists := os.LookupEnv("UCD_PATH")
+	defer restore("UCD_PATH", oldPath, exists)
+	pathUCD := fmt.Sprintf("./TEST%d-UnicodeData.txt", time.Now().UnixNano())
+	os.Setenv("UCD_PATH", pathUCD)
+	if got := obtainUCDPath(); got != pathUCD {
+		t.Errorf("obtainUCDPath() [set]\nexpected: %q; want: %q", pathUCD, got)
+	}
+}
+
+func TestObtainPathUCD_default(t *testing.T) {
+	oldPath, exists := os.LookupEnv("UCD_PATH")
+	defer restore("UCD_PATH", oldPath, exists)
+	os.Unsetenv("UCD_PATH")
+	suffix := "/UnicodeData.txt"
+	if got := obtainUCDPath(); !strings.HasSuffix(got, suffix) {
+		t.Errorf("obtainUCDPath() [default]\nexpected (suffix): %q; want: %q", suffix, got)
+	}
+}
 
 func TestReadLine(t *testing.T) {
 	r, name, words := readLine(lineLetterA)

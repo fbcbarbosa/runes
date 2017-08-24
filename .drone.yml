@@ -8,9 +8,11 @@ pipeline:
     commands:
       - go get -t ./...
       - go test .
+      - echo ""
 
   build:
     image: golang:1.8-alpine
     commands:
       - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo
+      - echo ""
 

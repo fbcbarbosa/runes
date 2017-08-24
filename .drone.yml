@@ -3,16 +3,27 @@ workspace:
   path: src/github.com/fbcbarbosa/runes
 
 pipeline:
-  test:
+  deps:
     image: golang:1.8-alpine
     commands:
       - go get -t ./...
+    when:
+      branch: 
+        - $DRONE_BRANCH
+  
+  test:
+    image: golang:1.8-alpine
+    commands:
       - go test .
-      - echo ""
+    when:
+      branch: 
+        - ${DRONE_BRANCH}
 
   build:
     image: golang:1.8-alpine
     commands:
       - CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo
-      - echo ""
+    when:
+      branch: 
+        - $${DRONE_BRANCH}
 
